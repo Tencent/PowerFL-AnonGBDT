@@ -1,0 +1,5 @@
+@inproceedings{sp2026c1paper1050,
+  title={Practical Anonymous Two-Party Gradient Boosting Decision Tree},
+  booktitle={47th IEEE Symposium on Security and Privacy (S&P 2026)},
+  year={2026}
+}

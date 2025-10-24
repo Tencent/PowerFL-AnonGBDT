@@ -1,0 +1,256 @@
+load("//bazel:spu.bzl", "spu_cc_binary", "spu_cc_library", "spu_cc_test")
+load("@yacl//bazel:yacl.bzl", "AES_COPT_FLAGS")
+
+package(default_visibility = ["//visibility:public"])
+
+spu_cc_library(
+    name = "paxos_okvs",
+    srcs = ["paxos_okvs.cc"],
+    hdrs = ["paxos_okvs.h"],
+    deps = [
+        "//libspu/core:prelude",
+        "@psi//psi/rr22/okvs:paxos",
+        "@psi//psi/utils:cuckoo_index",
+        "@yacl//yacl/crypto/hash:hash_utils",
+        "@yacl//yacl/crypto/rand",
+        "@yacl//yacl/utils:parallel",
+    ],
+)
+
+spu_cc_library(
+    name = "cuckoo_hash",
+    srcs = ["cuckoo_hash.cc"],
+    hdrs = ["cuckoo_hash.h"],
+    deps = [
+        "//libspu/core:prelude",
+        "@com_google_absl//absl/strings",
+        "@psi//psi/bc22:generalized_cuckoo_hash",
+        "@yacl//yacl/crypto/rand",
+        "@yacl//yacl/crypto/hash:hash_utils",
+        "@yacl//yacl/link",
+        "@yacl//yacl/utils:parallel",
+    ],
+)
+
+spu_cc_library(
+    name = "vole_cpsi",
+    srcs = ["vole_cpsi.cc"],
+    hdrs = ["vole_cpsi.h"],
+    copts = AES_COPT_FLAGS,
+    deps = [
+        ":cuckoo_hash",
+        ":paxos_okvs",
+        "//libspu/core:prelude",
+        "//libspu/mpc/cheetah:type",
+        "//libspu/mpc/cheetah/nonlinear:equal_prot",
+        "//libspu/mpc/cheetah/okvs:galois",
+        "//libspu/mpc/cheetah/ot",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/strings",
+        "@psi//psi/bc22:emp_vole",
+        "@psi//psi/utils:communication",
+        "@psi//psi/utils:serialize",
+        "@yacl//yacl/base:int128",
+        "@yacl//yacl/crypto/rand",
+        "@yacl//yacl/kernels/algorithms:silent_vole",
+        "@yacl//yacl/link",
+        "@yacl//yacl/utils:parallel",
+    ],
+)
+
+spu_cc_library(
+    name = "operators",
+    srcs = ["operators.cc"],
+    hdrs = ["operators.h"],
+    deps = [
+        "//libspu/core:config",
+        "//libspu/core:context",
+        "//libspu/core:type_util",
+        "//libspu/kernel/hal:fxp_approx",
+        "//libspu/mpc:factory",
+        "//libspu/mpc/cheetah:arithmetic",
+        "//libspu/mpc/cheetah:boolean",
+        "//libspu/mpc/cheetah:conversion",
+        "//libspu/mpc/cheetah:state",
+        "//libspu/mpc/cheetah:type",
+        "//libspu/mpc/common:communicator",
+        "//libspu/mpc/common:pv2k",
+        "//libspu/mpc/utils:ring_ops",
+        "@psi//psi/utils:communication",
+        "@yacl//yacl/link:context",
+    ],
+)
+
+spu_cc_library(
+    name = "histogram",
+    srcs = ["histogram.cc"],
+    hdrs = ["histogram.h"],
+    deps = [
+        "//experimental/squirrel:objectives",
+        "//libspu/core:prelude",
+        "//libspu/core:type_util",
+        "//libspu/mpc/cheetah/arith:cheetah_mul",
+        "//libspu/mpc/cheetah/nonlinear:compare_prot",
+        "//libspu/mpc/cheetah/nonlinear:truncate_prot",
+        "//libspu/mpc/cheetah/ot",
+        "//libspu/mpc/cheetah/rlwe:fast_pack",
+        "//libspu/mpc/common:communicator",
+        "//libspu/mpc/utils:ring_ops",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@psi//psi/utils:communication",
+        "@yacl//yacl/crypto/rand",
+    ],
+)
+
+spu_cc_library(
+    name = "anon_xgb",
+    srcs = [
+        "anon_xgb.cc",
+        "anon_xgb_s.cc",
+    ],
+    hdrs = ["anon_xgb.h"],
+    copts = select({
+        "@bazel_tools//src/conditions:darwin_x86_64": ["-Xclang"],
+        "@bazel_tools//src/conditions:darwin_arm64": ["-Xclang"],
+        "//conditions:default": [],
+    }) + ["-fopenmp"],
+    linkopts = select({
+        "@bazel_tools//src/conditions:darwin_x86_64": ["-lomp"],
+        "@bazel_tools//src/conditions:darwin_arm64": ["-lomp"],
+        "//conditions:default": [],
+    }),
+    deps = [
+        ":vole_cpsi",
+        ":histogram",
+        ":operators",
+        "//libspu/mpc/cheetah:state",
+        "//libspu/mpc/cheetah/arith:arith_comm",
+        "@yacl//yacl/crypto/rand",
+        "//libspu/mpc/utils:ring_ops",
+        #       "//lib/libomp.a",
+    ] + select({
+        "@bazel_tools//src/conditions:darwin_x86_64": ["@macos_omp_x64//:openmp"],
+        #                 "@bazel_tools//src/conditions:darwin_arm64": ["@local_homebrew_arm64//:openmp"],
+        "//conditions:default": [],
+    }),
+)
+
+spu_cc_binary(
+    name = "anongbdt_main",
+    srcs = ["anongbdt_main.cc", "main_io.h"],
+    copts = select({
+        "@bazel_tools//src/conditions:darwin_x86_64": ["-Xclang"],
+        "@bazel_tools//src/conditions:darwin_arm64": ["-Xclang"],
+        "//conditions:default": [],
+    }) + ["-fopenmp"],
+    linkopts = select({
+        "@bazel_tools//src/conditions:darwin_x86_64": ["-lomp"],
+        "@bazel_tools//src/conditions:darwin_arm64": ["-lomp"],
+        "//conditions:default": [],
+    }),
+    deps = [
+        ":anon_xgb",
+        ":histogram",
+        "//libspu/core:prelude",
+        "//libspu/kernel/hal:fxp_base",
+        "//libspu/mpc/cheetah:arithmetic",
+        "//libspu/mpc/cheetah:boolean",
+        "//libspu/mpc/cheetah:conversion",
+        "//libspu/mpc/cheetah:type",
+        "@boost//:program_options",
+        "@yacl//yacl/link:context",
+    ] + select({
+        "@bazel_tools//src/conditions:darwin_x86_64": ["@macos_omp_x64//:openmp"],
+        "//conditions:default": [],
+    }),
+)
+
+spu_cc_binary(
+    name = "basegbdt_main",
+    srcs = ["basegbdt_main.cc", "main_io.h"],
+    copts = select({
+        "@bazel_tools//src/conditions:darwin_x86_64": ["-Xclang"],
+        "@bazel_tools//src/conditions:darwin_arm64": ["-Xclang"],
+        "//conditions:default": [],
+    }) + ["-fopenmp"],
+    linkopts = select({
+        "@bazel_tools//src/conditions:darwin_x86_64": ["-lomp"],
+        "@bazel_tools//src/conditions:darwin_arm64": ["-lomp"],
+        "//conditions:default": [],
+    }),
+    deps = [
+        ":anon_xgb",
+        ":histogram",
+        "//libspu/core:prelude",
+        "//libspu/kernel/hal:fxp_base",
+        "//libspu/mpc/cheetah:arithmetic",
+        "//libspu/mpc/cheetah:boolean",
+        "//libspu/mpc/cheetah:conversion",
+        "//libspu/mpc/cheetah:type",
+        "@boost//:program_options",
+        "@yacl//yacl/link:context",
+    ] + select({
+        "@bazel_tools//src/conditions:darwin_x86_64": ["@macos_omp_x64//:openmp"],
+        "//conditions:default": [],
+    }),
+)
+
+spu_cc_binary(
+    name = "benchmark",
+    srcs = ["benchmark.cc"],
+    copts = select({
+        "@bazel_tools//src/conditions:darwin_x86_64": ["-Xclang"],
+        "@bazel_tools//src/conditions:darwin_arm64": ["-Xclang"],
+        "//conditions:default": [],
+    }) + ["-fopenmp"],
+    linkopts = select({
+        "@bazel_tools//src/conditions:darwin_x86_64": ["-lomp"],
+        "@bazel_tools//src/conditions:darwin_arm64": ["-lomp"],
+        "//conditions:default": [],
+    }),
+    deps = [
+        ":anon_xgb",
+        ":histogram",
+        "//libspu/core:prelude",
+        "//libspu/kernel/hal:fxp_base",
+        "//libspu/mpc/cheetah:arithmetic",
+        "//libspu/mpc/cheetah:boolean",
+        "//libspu/mpc/cheetah:conversion",
+        "//libspu/mpc/cheetah:type",
+        "@boost//:program_options",
+        "@yacl//yacl/link:context",
+    ] + select({
+        "@bazel_tools//src/conditions:darwin_x86_64": ["@macos_omp_x64//:openmp"],
+        "//conditions:default": [],
+    }),
+)
+
+spu_cc_binary(
+    name = "anongbdt_inference",
+    srcs = ["anongbdt_inference.cc", "main_io.h"],
+    copts = select({
+        "@bazel_tools//src/conditions:darwin_x86_64": ["-Xclang"],
+        "@bazel_tools//src/conditions:darwin_arm64": ["-Xclang"],
+        "//conditions:default": [],
+    }) + ["-fopenmp"],
+    linkopts = select({
+        "@bazel_tools//src/conditions:darwin_x86_64": ["-lomp"],
+        "@bazel_tools//src/conditions:darwin_arm64": ["-lomp"],
+        "//conditions:default": [],
+    }),
+    deps = [
+        ":anon_xgb",
+        ":histogram",
+        "//libspu/core:prelude",
+        "//libspu/kernel/hal:fxp_base",
+        "//libspu/mpc/cheetah:arithmetic",
+        "//libspu/mpc/cheetah:boolean",
+        "//libspu/mpc/cheetah:conversion",
+        "//libspu/mpc/cheetah:type",
+        "@boost//:program_options",
+        "@yacl//yacl/link:context",
+    ] + select({
+        "@bazel_tools//src/conditions:darwin_x86_64": ["@macos_omp_x64//:openmp"],
+        "//conditions:default": [],
+    }),
+)

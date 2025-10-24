@@ -1,0 +1,49 @@
+{
+    "C_Cpp.intelliSenseEngine": "disabled",
+    "C_Cpp.autocomplete": "disabled",
+    "clangd.arguments": [
+        "--clang-tidy", // 开启clang-tidy
+        "--all-scopes-completion", // 全代码库补全
+        "--completion-style=detailed" // 详细补全
+        "--compile-commands-dir=${workspaceFolder}/",
+        "--query-driver=**"
+    ],
+    "testMate.cpp.discovery.testListCaching": true,
+    "testMate.cpp.test.parallelExecutionOfExecutableLimit": 8,
+    "testMate.cpp.test.advancedExecutables": [
+        {
+            "pattern": "bazel-bin/**/*{_test}",
+            "cwd": "${workspaceFolder}",
+            "gtest": {
+                "testGrouping": {
+                    "groupBySource": {
+                        "label": "${sourceRelPath[1:]}"
+                    }
+                }
+            }
+        }
+    ],
+    "files.watcherExclude": {
+        "**/.git/**": true,
+        "**/.cache/**": true,
+        "**/bazel-*/**": true,
+        "**/external/**": true
+    },
+    "bazel.enableCodeLens": true,
+    "editor.formatOnSave": false,
+    "editor.bracketPairColorization.enabled": true,
+    "editor.guides.bracketPairs": "active",
+    "[dockerfile]": {
+        "editor.quickSuggestions": {
+            "strings": true
+        },
+        "editor.formatOnSave": false,
+    },
+    "python.formatting.provider": "none",
+    "esbonio.sphinx.confDir": "",
+    "git.ignoreLimitWarning": true,
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.black-formatter"
+    },
+    "mlir.server_path": "bazel-bin/libspu/compiler/tools/pphlo-lsp"
+}

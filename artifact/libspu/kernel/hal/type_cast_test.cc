@@ -1,0 +1,103 @@
+// Copyright 2021 Ant Group Co., Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include "libspu/kernel/hal/type_cast.h"
+
+#include <cstdint>
+
+#include "gtest/gtest.h"
+#include "xtensor/xio.hpp"
+
+#include "libspu/kernel/hal/constants.h"
+#include "libspu/kernel/test_util.h"
+#include "libspu/mpc/utils/simulate.h"
+
+namespace spu::kernel::hal {
+namespace {
+
+TEST(TypeCastTest, int2fxp) {
+  const xt::xarray<int32_t> x = test::xt_random<int32_t>({5, 6});
+  auto expected = xt::cast<int32_t>(x);
+  SPUContext ctx = test::makeSPUContext();
+
+  {
+    Value a = constant(&ctx, x, DT_I32);
+    Value c = dtype_cast(&ctx, a, DT_F32);
+    EXPECT_EQ(c.dtype(), DT_F32);
+
+    auto y = dump_public_as<float>(&ctx, c);
+    EXPECT_TRUE(xt::allclose(expected, y, 0.1, 0.5)) << x << std::endl
+                                                     << expected << std::endl
+                                                     << y;
+  }
+
+  {
+    Value a = test::makeValue(&ctx, x, VIS_SECRET);
+    Value c = dtype_cast(&ctx, a, DT_F32);
+    EXPECT_EQ(c.dtype(), DT_F32);
+
+    auto y = dump_public_as<float>(&ctx, _s2p(&ctx, c).setDtype(DT_F32));
+    EXPECT_TRUE(xt::allclose(expected, y, 0.1, 0.5)) << x << std::endl
+                                                     << expected << std::endl
+                                                     << y;
+  }
+}
+
+TEST(TypeCastTest, fxp2int) {
+  const xt::xarray<float> x = {{0.0, 1.0, 5.0, 10.0, 100.0, 1000.0},
+                               {0.1, 0.5, 0.7, 10.1, 10.5, 10.7},
+                               {-0.0, -1.0, -5.0, -10.0, -100.0, -1000.0},
+                               {-0.1, -0.5, -0.7, -10.1, -10.5, -10.7}};
+  auto expected = xt::cast<int32_t>(x);
+  SPUContext ctx = test::makeSPUContext();
+
+  {
+    Value a = constant(&ctx, x, DT_F32);
+    Value c = dtype_cast(&ctx, a, DT_I32);
+    EXPECT_EQ(c.dtype(), DT_I32);
+
+    auto y = dump_public_as<int>(&ctx, c);
+    EXPECT_TRUE(xt::allclose(expected, y, 0.1, 0.5)) << x << std::endl
+                                                     << expected << std::endl
+                                                     << y;
+  }
+
+  {
+    Value a = test::makeValue(&ctx, x, VIS_SECRET);
+    Value c = dtype_cast(&ctx, a, DT_I32);
+    EXPECT_EQ(c.dtype(), DT_I32);
+
+    auto y = dump_public_as<int>(&ctx, _s2p(&ctx, c).setDtype(DT_I32));
+    EXPECT_TRUE(xt::allclose(expected, y, 0.1, 0.5)) << x << std::endl
+                                                     << expected << std::endl
+                                                     << y;
+  }
+
+  // TODO: cast to other int than DT_I32
+}
+
+TEST(TypeCastTest, boolean) {
+  mpc::utils::simulate(
+      3, [&](const std::shared_ptr<yacl::link::Context> &lctx) {
+        SPUContext sctx = test::makeSPUContext(SEMI2K, FM64, lctx);
+        Value pa = constant(&sctx, true, DT_I1);
+        Value sa = seal(&sctx, pa);
+        EXPECT_EQ(sa.dtype(), DT_I1);
+        EXPECT_TRUE(sa.storage_type().isa<BShare>());
+        EXPECT_EQ(sa.storage_type().as<BShare>()->nbits(), 1);
+      });
+}
+
+}  // namespace
+}  // namespace spu::kernel::hal
