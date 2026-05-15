@@ -1,6 +1,6 @@
 # PowerFL-AnonGBDT
 
-[SP 2026] Official code of the paper "Practical Anonymous Two-Party Gradient Boosting Decision Tree".
+[SP 2026] Official code of the paper ["Practical Anonymous Two-Party Gradient Boosting Decision Tree"](paper/AnonGBDT_SP26_paper.pdf).
 
 Keywords: Multi-party Computation, Federated Learning, Private Set Intersection, Homomorphic Encryption
 
